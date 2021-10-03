@@ -3350,11 +3350,11 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
             
             // optimus prime
             else if (type == NSTransformableAttributeType) {
-                NSString *name = ([(id)property valueTransformerName] ?: NSKeyedUnarchiveFromDataTransformerName);
+                NSString *name = ([(id)property valueTransformerName] ?: NSSecureUnarchiveFromDataTransformerName);
                 if ([name isEqualToString:@""]) {
-                    name = NSKeyedUnarchiveFromDataTransformerName;
+                    name = NSSecureUnarchiveFromDataTransformerName;
                 }
-                const BOOL isDefaultTransformer = [name isEqualToString:NSKeyedUnarchiveFromDataTransformerName];
+                const BOOL isDefaultTransformer = [name isEqualToString: NSSecureUnarchiveFromDataTransformerName];
                 NSValueTransformer *transformer = [NSValueTransformer valueTransformerForName:name];
                 NSData *data = isDefaultTransformer ? [transformer reverseTransformedValue:value] : [transformer transformedValue:value];
                 sqlite3_bind_blob(statement, index, [data bytes], (int)[data length], SQLITE_TRANSIENT);
@@ -3429,15 +3429,15 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
         
         // transformable
         else if (type == NSTransformableAttributeType) {
-            NSString *name = ([(id)property valueTransformerName] ?: NSKeyedUnarchiveFromDataTransformerName);
+            NSString *name = ([(id)property valueTransformerName] ?: NSSecureUnarchiveFromDataTransformerName);
             if ([name isEqualToString:@""]) {
-                name = NSKeyedUnarchiveFromDataTransformerName;
+                name = NSSecureUnarchiveFromDataTransformerName;
             }
             NSValueTransformer *transformer = [NSValueTransformer valueTransformerForName:name];
             const void *bytes = sqlite3_column_blob(statement, index);
             NSUInteger length = (NSUInteger)sqlite3_column_bytes(statement, index);
             if (length > 0) {
-                const BOOL isDefaultTransformer = [name isEqualToString:NSKeyedUnarchiveFromDataTransformerName];
+                const BOOL isDefaultTransformer = [name isEqualToString:NSSecureUnarchiveFromDataTransformerName];
                 NSData *data = [NSData dataWithBytes:bytes length:length];
                 return isDefaultTransformer ? [transformer transformedValue:data] : [transformer reverseTransformedValue:data];
             }
