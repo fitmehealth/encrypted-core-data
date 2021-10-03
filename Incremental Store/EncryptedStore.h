@@ -5,6 +5,7 @@
 //
 //
 
+#import <SQLCipher/sqlite3.h>
 #import <CoreData/CoreData.h>
 
 typedef struct _options {
