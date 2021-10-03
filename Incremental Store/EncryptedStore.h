@@ -75,9 +75,12 @@ typedef NS_ENUM(NSInteger, EncryptedStoreError)
 + (NSPersistentStoreCoordinator *)makeStoreWithStructOptions:(EncryptedStoreOptions *) options managedObjectModel:(NSManagedObjectModel *)objModel error:(NSError * __autoreleasing*)error;
 + (NSPersistentStoreCoordinator *)makeStore:(NSManagedObjectModel *) objModel
                                    passcode:(NSString *) passcode error:(NSError * __autoreleasing*)error;
++ (NSString *)tableNameForEntity:(NSEntityDescription *)entity;
 
 #pragma mark - Passphrase manipulation
 #pragma mark - Public
+
+- (sqlite3*) getDatabase;
 
 /**
  @discussion Check old passphrase and if success change old passphrase to new passphrase.

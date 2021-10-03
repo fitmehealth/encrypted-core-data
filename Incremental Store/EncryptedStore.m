@@ -378,6 +378,10 @@ static const NSInteger kTableCheckVersion = 1;
 
 #pragma mark - incremental store functions
 
+- (sqlite3*) getDatabase {
+    return database;
+}
+
 - (id)initWithPersistentStoreCoordinator:(NSPersistentStoreCoordinator *)root
                        configurationName:(NSString *)name
                                      URL:(NSURL *)URL
@@ -416,7 +420,7 @@ static const NSInteger kTableCheckVersion = 1;
         
         if ([objectID isTemporaryID]) {
             NSEntityDescription *entity = [obj entity];
-            NSString *table = [self tableNameForEntity:entity];
+            NSString *table = [EncryptedStore tableNameForEntity:entity];
             NSNumber *value = [self maximumObjectIDInTable:table];
             if (value == nil) {
                 if (error) { *error = [self databaseError]; }
@@ -445,7 +449,7 @@ static const NSInteger kTableCheckVersion = 1;
         NSMutableArray *results = [NSMutableArray array];
         NSString * joinStatement = [self getJoinClause:fetchRequest withPredicate:[fetchRequest predicate] initial:YES];
         
-        NSString *table = [self tableNameForEntity:entity];
+        NSString *table = [EncryptedStore tableNameForEntity:entity];
         NSDictionary *condition = [self whereClauseWithFetchRequest:fetchRequest];
         NSDictionary *ordering = [self orderClause:fetchRequest forEntity:entity];
         NSString *limit = ([fetchRequest fetchLimit] > 0 ? [NSString stringWithFormat:@" LIMIT %lu", (unsigned long)[fetchRequest fetchLimit]] : @"");
@@ -607,7 +611,7 @@ static const NSInteger kTableCheckVersion = 1;
     NSMutableSet *entityTypes = [NSMutableSet set];
     unsigned long long primaryKey = [[self referenceObjectForObjectID:objectID] unsignedLongLongValue];
     
-    NSString *table = [self tableNameForEntity:entity];
+    NSString *table = [EncryptedStore tableNameForEntity:entity];
     
     // enumerate properties
     NSDictionary *properties = [entity propertiesByName];
@@ -632,7 +636,7 @@ static const NSInteger kTableCheckVersion = 1;
                 // We need to fetch the direct entity not its super type
                 if ([self entityNeedsEntityTypeColumn:destinationEntity]) {
                     // Get the destination table for the type look up
-                    NSString *destinationTable = [self tableNameForEntity:destinationEntity];
+                    NSString *destinationTable = [EncryptedStore tableNameForEntity:destinationEntity];
                     NSString *destinationAlias = [NSString stringWithFormat:@"t%lu", (unsigned long)tableAliasIndex];
                     tableAliasIndex++;
 
@@ -722,7 +726,7 @@ static const NSInteger kTableCheckVersion = 1;
                             @"SELECT %@%@ FROM %@ WHERE __objectID=?",
                             [self foreignKeyColumnForRelationship:relationship],
                             shouldFetchSourceEntityType ? @", __entityType" : @"",
-                            [self tableNameForEntity:sourceEntity]];
+                            [EncryptedStore tableNameForEntity:sourceEntity]];
         statement = [self preparedStatementForQuery:string];
         sqlite3_bind_int64(statement, 1, key);
         
@@ -740,7 +744,7 @@ static const NSInteger kTableCheckVersion = 1;
         NSString *join = @"";
         NSString *destinationTypeColumn = @"";
         if (shouldFetchDestinationEntityType) {
-            NSString *destinationTable = [self tableNameForEntity:destinationEntity];
+            NSString *destinationTable = [EncryptedStore tableNameForEntity:destinationEntity];
             destinationTypeColumn = [NSString stringWithFormat:@", %@.__entityType", destinationTable];
             join = [NSString stringWithFormat:@" INNER JOIN %@ ON %@.__objectid=%@.%@", destinationTable, destinationTable, relationTable, destinationIDColumn];
             
@@ -757,7 +761,7 @@ static const NSInteger kTableCheckVersion = 1;
         
     } else {
         // one-to-many relationship, foreign key exists in destination entity table
-        NSString *destinationTable = [self tableNameForEntity:destinationEntity];
+        NSString *destinationTable = [EncryptedStore tableNameForEntity:destinationEntity];
 
         NSString *string = [NSString stringWithFormat:
                             @"SELECT __objectID%@ FROM %@ WHERE %@ AND %@=? ORDER BY %@ ASC",
@@ -1457,7 +1461,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
 
         switch ([entityMapping mappingType]) {
             case NSAddEntityMappingType: {
-                NSString *destRootEntityName = [self rootForEntity:destinationEntity].name;
+                NSString *destRootEntityName = [EncryptedStore rootForEntity:destinationEntity].name;
                 NSEntityDescription *destRootEntity = destinationEntities[destRootEntityName];
                 if (![updatedRootEntities containsObject:destRootEntity]) {
                     [updatedRootEntities addObject:destRootEntity];
@@ -1488,7 +1492,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
             } break;
 
             case NSRemoveEntityMappingType: {
-                NSString *srcRootEntityName = [self rootForEntity:sourceEntity].name;
+                NSString *srcRootEntityName = [EncryptedStore rootForEntity:sourceEntity].name;
                 NSEntityDescription *srcRootEntity = sourceEntities[srcRootEntityName];
                 if ([removedRootEntities containsObject:srcRootEntity]) {
                     return;
@@ -1510,8 +1514,8 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
 
             case NSTransformEntityMappingType: {
                 // root Entity for Src/Dest MUST exist when we got subentity only changes
-                NSString *srcRootEntityName = [self rootForEntity:sourceEntity].name;
-                NSString *destRootEntityName = [self rootForEntity:destinationEntity].name;
+                NSString *srcRootEntityName = [EncryptedStore rootForEntity:sourceEntity].name;
+                NSString *destRootEntityName = [EncryptedStore rootForEntity:destinationEntity].name;
                 NSEntityDescription *srcRootEntity = sourceEntities[srcRootEntityName];
                 NSEntityDescription *destRootEntity = destinationEntities[destRootEntityName];
                 if (![updatedRootEntities containsObject:destRootEntity]) {
@@ -1677,7 +1681,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
     // create table
     NSString *string = [NSString stringWithFormat:
                         @"CREATE TABLE %@ (%@);",
-                        [self tableNameForEntity:entity],
+                        [EncryptedStore tableNameForEntity:entity],
                         [columns componentsJoinedByString:@", "]];
     sqlite3_stmt *statement = [self preparedStatementForQuery:string];
     sqlite3_step(statement);
@@ -1699,7 +1703,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
     }
     
     NSArray * indexedColumns = [self columnNamesForEntity:entity indexedOnly:YES quotedNames:NO];
-    NSString * tableName = [self tableNameForEntity:entity];
+    NSString * tableName = [EncryptedStore tableNameForEntity:entity];
     for (NSString * column in indexedColumns) {
         NSString * query = [NSString stringWithFormat:
                             @"CREATE INDEX %@_%@_INDEX ON %@ (`%@`)",
@@ -1725,7 +1729,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
     }
 
     NSArray * indexedColumns = [self columnNamesForEntity:entity indexedOnly:YES quotedNames:NO];
-    NSString * tableName = [self tableNameForEntity:entity];
+    NSString * tableName = [EncryptedStore tableNameForEntity:entity];
     for (NSString * column in indexedColumns) {
         NSString * query = [NSString stringWithFormat:
                             @"DROP INDEX IF EXISTS %@_%@_INDEX",
@@ -1743,7 +1747,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
 }
 
 - (BOOL)dropTableForEntity:(NSEntityDescription *)entity {
-    NSString *name = [self tableNameForEntity:entity];
+    NSString *name = [EncryptedStore tableNameForEntity:entity];
     return [self dropTableNamed:name];
 }
 
@@ -1763,8 +1767,8 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
     NSString *string;
     sqlite3_stmt *statement;
   
-    NSEntityDescription *rootSourceEntity = [self rootForEntity:sourceEntity];
-    NSEntityDescription *rootDestinationEntity = [self rootForEntity:destinationEntity];
+    NSEntityDescription *rootSourceEntity = [EncryptedStore rootForEntity:sourceEntity];
+    NSEntityDescription *rootDestinationEntity = [EncryptedStore rootForEntity:destinationEntity];
   
     NSString *sourceEntityName = [NSString stringWithFormat:@"ecd%@", [rootSourceEntity name]];
     NSString *temporaryTableName = [NSString stringWithFormat:@"_T_%@", sourceEntityName];
@@ -2097,8 +2101,8 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
     NSParameterAssert(firstOrderColumn);
     NSParameterAssert(secondOrderColumn);
     
-    NSEntityDescription *rootSourceEntity = [self rootForEntity:relationship.entity];
-    NSEntityDescription *rootDestinationEntity = [self rootForEntity:relationship.destinationEntity];
+    NSEntityDescription *rootSourceEntity = [EncryptedStore rootForEntity:relationship.entity];
+    NSEntityDescription *rootDestinationEntity = [EncryptedStore rootForEntity:relationship.destinationEntity];
     
     static NSString *format = @"%@__objectid";
     static NSString *orderFormat = @"%@_order";
@@ -2137,8 +2141,8 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
     NSParameterAssert(firstOrderColumn);
     NSParameterAssert(secondOrderColumn);
     
-    NSEntityDescription *rootSourceEntity = [self rootForEntity:relationship.entity];
-    NSEntityDescription *rootDestinationEntity = [self rootForEntity:relationship.destinationEntity];
+    NSEntityDescription *rootSourceEntity = [EncryptedStore rootForEntity:relationship.entity];
+    NSEntityDescription *rootDestinationEntity = [EncryptedStore rootForEntity:relationship.destinationEntity];
     
     static NSString *format = @"%@__objectid";
     static NSString *orderFormat = @"%@_order";
@@ -2175,8 +2179,8 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
     NSParameterAssert(firstIDColumn);
     NSParameterAssert(secondIDColumn);
     
-    NSEntityDescription *rootSourceEntity = [self rootForEntity:relationship.entity];
-    NSEntityDescription *rootDestinationEntity = [self rootForEntity:relationship.destinationEntity];
+    NSEntityDescription *rootSourceEntity = [EncryptedStore rootForEntity:relationship.entity];
+    NSEntityDescription *rootDestinationEntity = [EncryptedStore rootForEntity:relationship.destinationEntity];
     
     static NSString *format = @"%@__objectid";
     
@@ -2257,7 +2261,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
 - (BOOL)checkTableForEntity:(NSEntityDescription *)entity error:(NSError **)error {
     if (entity.superentity) return YES;
 
-    NSString *tableName = [self tableNameForEntity:entity];
+    NSString *tableName = [EncryptedStore tableNameForEntity:entity];
 
     BOOL hasTable;
     if (![self hasTable:&hasTable withName:tableName error:error]) {
@@ -2469,14 +2473,14 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
         if ([self entityNeedsEntityTypeColumn:entity]) {
             string = [NSString stringWithFormat:
                       @"INSERT INTO %@ ('__entityType', %@) VALUES(%ld, %@);",
-                      [self tableNameForEntity:entity],
+                      [EncryptedStore tableNameForEntity:entity],
                       [columns componentsJoinedByString:@", "],
                       entity.typeHash,
                       [[NSArray cmdArrayWithObject:@"?" times:[columns count]] componentsJoinedByString:@", "]];
         } else {
             string = [NSString stringWithFormat:
                       @"INSERT INTO %@ (%@) VALUES(%@);",
-                      [self tableNameForEntity:entity],
+                      [EncryptedStore tableNameForEntity:entity],
                       [columns componentsJoinedByString:@", "],
                       [[NSArray cmdArrayWithObject:@"?" times:[columns count]] componentsJoinedByString:@", "]];
         }
@@ -2630,7 +2634,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
         // prepare statement
         NSString *string = [NSString stringWithFormat:
                             @"UPDATE %@ SET %@ WHERE __objectID=?;",
-                            [self tableNameForEntity:entity],
+                            [EncryptedStore tableNameForEntity:entity],
                             [columns componentsJoinedByString:@", "]];
         sqlite3_stmt *statement = [self preparedStatementForQuery:string];
         
@@ -2816,7 +2820,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
         // delete object
         NSString *string = [NSString stringWithFormat:
                             @"DELETE FROM %@ WHERE __objectID=?;",
-                            [self tableNameForEntity:entity]];
+                            [EncryptedStore tableNameForEntity:entity]];
         sqlite3_stmt *statement = [self preparedStatementForQuery:string];
         sqlite3_bind_int64(statement, 1, [objectID unsignedLongLongValue]);
         sqlite3_step(statement);
@@ -2843,8 +2847,8 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
             NSRelationshipDescription *desc = (NSRelationshipDescription *)prop;
             NSRelationshipDescription *inverse = [desc inverseRelationship];
             if ([desc isToMany] && [inverse isToMany]) {
-                NSEntityDescription *rootSourceEntity = [self rootForEntity:desc.entity];
-                NSEntityDescription *rootDestinationEntity = [self rootForEntity:inverse.entity];
+                NSEntityDescription *rootSourceEntity = [EncryptedStore rootForEntity:desc.entity];
+                NSEntityDescription *rootDestinationEntity = [EncryptedStore rootForEntity:inverse.entity];
                 NSString *entityName = [rootSourceEntity name];
 
                 if ([rootSourceEntity isEqual:rootDestinationEntity]) {
@@ -2960,13 +2964,13 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
     
 }
 
-- (NSString *)tableNameForEntity:(NSEntityDescription *)entity
++ (NSString *)tableNameForEntity:(NSEntityDescription *)entity
 {
-    return [NSString stringWithFormat:@"ecd%@", [self rootForEntity:entity].name];
+    return [NSString stringWithFormat:@"ecd%@", [EncryptedStore rootForEntity:entity].name];
 }
 
 /// Traverses up the object hierarchy and finds the base entity
-- (NSEntityDescription *)rootForEntity:(NSEntityDescription *)entity
++ (NSEntityDescription *)rootForEntity:(NSEntityDescription *)entity
 {
     NSEntityDescription *targetEntity = entity;
     while ([targetEntity superentity] != nil) {
@@ -2999,7 +3003,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
         // We do need to detect the relationship though to know what table to prefix the key
         // with.
         
-        NSString *tableName = [self tableNameForEntity:entity];
+        NSString *tableName = [EncryptedStore tableNameForEntity:entity];
         NSString *key = [desc key];
         if ([desc.key rangeOfString:@"."].location != NSNotFound) {
             NSArray *components = [desc.key componentsSeparatedByString:@"."];
@@ -3133,7 +3137,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
     // We terminate when there is one item left since that is the field of interest
     NSEntityDescription *currentEntity = rootEntity;
     NSString *fullJoinClause;
-    NSString *lastTableName = [self tableNameForEntity:currentEntity];
+    NSString *lastTableName = [EncryptedStore tableNameForEntity:currentEntity];
     for (NSUInteger i = 0 ; i < keysArray.count; i++) {
         // alt names for tables for safety
         NSString *relTableName = [self joinedTableNameForComponents:
@@ -3181,7 +3185,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
                 NSString *firstJoinClause = [NSString stringWithFormat:@"LEFT OUTER JOIN %@ ON %@", joinTableAsClause1, joinTableOnClause1];
                 
                 NSString *joinTableAsClause2 = [NSString stringWithFormat:@"%@ AS %@",
-                                                [self tableNameForEntity:[rel destinationEntity]],
+                                                [EncryptedStore tableNameForEntity:[rel destinationEntity]],
                                                 nextTableName];
                 
                 NSString *joinTableOnClause2 = [NSString stringWithFormat:@"%@.%@ = %@.__objectID",
@@ -3197,7 +3201,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
                 
                 // We bracket all join table names so that periods are ok.
                 NSString *joinTableAsClause = [NSString stringWithFormat:@"%@ AS %@",
-                                               [self tableNameForEntity:rel.destinationEntity],
+                                               [EncryptedStore tableNameForEntity:rel.destinationEntity],
                                                nextTableName];
                 NSString *joinTableOnClause = nil;
                 if (rel.isToMany) {
@@ -3537,11 +3541,11 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
         NSString *entityWhere = nil;
         if (request.entity.subentities.count > 0 && request.includesSubentities) {
             entityWhere = [NSString stringWithFormat:@"%@.__entityType IN (%@)",
-                           [self tableNameForEntity:request.entity],
+                           [EncryptedStore tableNameForEntity:request.entity],
                            [[self entityIdsForEntity:request.entity] componentsJoinedByString:@", "]];
         } else {
             entityWhere = [NSString stringWithFormat:@"%@.__entityType = %ld",
-                           [self tableNameForEntity:request.entity],
+                           [EncryptedStore tableNameForEntity:request.entity],
                            request.entity.typeHash];
         }
         
@@ -3803,13 +3807,13 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
             }
             else {
                 value = [NSString stringWithFormat:@"%@.%@",
-                         [self tableNameForEntity:entity],
+                         [EncryptedStore tableNameForEntity:entity],
                          [self foreignKeyColumnForRelationship:property]];
             }
         }
         else if (property != nil) {
             value = [NSString stringWithFormat:@"%@.%@",
-                     [self tableNameForEntity:entity],
+                     [EncryptedStore tableNameForEntity:entity],
                      value];
         }
         else if ([value rangeOfString:@"."].location != NSNotFound) {
@@ -3850,7 +3854,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
             
             // Test if the last component is actually a predicate
             // TODO: Conflict if the model has an attribute named length?
-            NSString * entityTableName = [self tableNameForEntity:entity];
+            NSString * entityTableName = [EncryptedStore tableNameForEntity:entity];
             if ([lastComponent isEqualToString:@"length"]){
                                 
                 // We terminate when there is one item left since that is the field of interest
@@ -3906,7 +3910,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
                     path = path ? [path stringByAppendingFormat:@".%@", rel.name] : rel.name;
 
                     if (prevPath) {
-                        NSString *destTableName = [self tableNameForEntity:rel.destinationEntity];
+                        NSString *destTableName = [EncryptedStore tableNameForEntity:rel.destinationEntity];
 
                         if (rel.isToMany) {
                             if (rel.inverseRelationship.isToMany) { // many-to-many
@@ -3985,7 +3989,7 @@ static void dbsqliteStripCaseDiacritics(sqlite3_context *context, int argc, cons
 
                 BOOL isFirstRelManyToMany = firstRel.isToMany && firstRel.inverseRelationship.isToMany;
 
-                NSString *firstDestTableName = [self tableNameForEntity:firstRel.destinationEntity];
+                NSString *firstDestTableName = [EncryptedStore tableNameForEntity:firstRel.destinationEntity];
 
                 NSMutableString *select = [NSMutableString stringWithFormat:@"(SELECT COUNT([%@].[%@])\nFROM %@ [%@]\n",
                                                                                path,
